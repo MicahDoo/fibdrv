@@ -39,6 +39,16 @@ static inline void addBigNum(BigNum *sum, BigNum x, BigNum y)
     sum->lower = x.lower + y.lower;
 }
 
+static inline void rightShiftBigNum(BigNum *num)
+{
+    unsigned long long upper_rem = num->upper % 10;
+    num->upper /= 10;
+    unsigned long long lower_rem = num->lower % 10;
+    unsigned long long max_num_64 = (unsigned long long) -1;
+    num->lower = num->lower / 10 + upper_rem * (max_num_64 / 10) +
+                 (lower_rem + upper_rem * 6) / 10;
+}
+
 static BigNum *fib_sequence(long long k)
 {
     BigNum *first = vmalloc(sizeof(*first));
@@ -54,8 +64,6 @@ static BigNum *fib_sequence(long long k)
 
     for (int i = 2; i <= k; i++) {
         addBigNum(next, *first, *second);
-        // printk("!!!%llu = %llu + %llu\n", next->lower, first->lower,
-        // second->lower);
         temp = next;
         next = first;
         first = second;
@@ -88,33 +96,22 @@ static ssize_t fib_read(struct file *file,
     BigNum *num = fib_sequence(*offset);
     char str[45];
     int idx = 0;
-    int pattern[4] = {6, 2, 4, 8};
     while (idx < 44) {
-        int rem = 1llu & num->lower;
-        unsigned long long bitmask = 1llu << 1;
-        for (int i = 1; i < 64; ++i) {
-            rem += 0llu ^ (-(bitmask & num->lower) & (pattern[i % 4] ^ 0llu));
-            bitmask <<= 1;
+        if (num->upper != 0) {
+            str[idx] = (num->lower % 10 + (num->upper % 10) * 6) % 10 + '0';
+            rightShiftBigNum(num);
+        } else {
+            str[idx] = num->lower % 10 + '0';
+            num->lower /= 10;
         }
-        bitmask = 1llu;
-        for (int i = 0; i < 64; ++i) {
-            rem += 0llu ^ (-(bitmask & num->upper) & (pattern[i % 4] ^ 0llu));
-            bitmask <<= 1;
-        }
-        str[idx] = rem % 10 + '0';
-        ++idx;
-        num->lower /= 10;
-        num->lower += (num->upper % 10) << 31;
-        num->upper /= 10;
         if (!num->lower && !num->upper)
             break;
+        ++idx;
     }
-    buf[idx] = '\0';
-    idx--;
-    for (int j = idx; j > 0; --j) {
+    buf[idx + 1] = '\0';
+    for (int j = idx; j >= 0; --j) {
         buf[j] = str[idx - j];
     }
-
     return (ssize_t) 1;
 }
 
