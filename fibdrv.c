@@ -6,6 +6,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/vmalloc.h>
+
+// #include "big_num.h"
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
@@ -17,26 +20,48 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 92
+#define MAX_LENGTH 100
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
 
-static long long fib_sequence(long long k)
-{
-    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
-    long long f[k + 2];
+typedef struct BigNum {
+    unsigned long long lower, upper;
+} BigNum;
 
-    f[0] = 0;
-    f[1] = 1;
+static inline void addBigNum(BigNum *sum, BigNum x, BigNum y)
+{
+    sum->upper = x.upper + y.upper;
+    if (y.lower > ~x.lower)
+        sum->upper++;
+    sum->lower = x.lower + y.lower;
+}
+
+static BigNum *fib_sequence(long long k)
+{
+    BigNum *first = vmalloc(sizeof(*first));
+    first->upper = 0;
+    first->lower = 0;
+    BigNum *second = vmalloc(sizeof(*second));
+    second->upper = 0;
+    second->lower = 1;
+    BigNum *next = vmalloc(sizeof(*next));
+    next->upper = 0;
+    next->lower = k;
+    BigNum *temp = next;
 
     for (int i = 2; i <= k; i++) {
-        f[i] = f[i - 1] + f[i - 2];
+        addBigNum(next, *first, *second);
+        // printk("!!!%llu = %llu + %llu\n", next->lower, first->lower,
+        // second->lower);
+        temp = next;
+        next = first;
+        first = second;
+        second = temp;
     }
-
-    return f[k];
+    return temp;
 }
 
 static int fib_open(struct inode *inode, struct file *file)
@@ -60,7 +85,39 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_sequence(*offset);
+    BigNum *num = fib_sequence(*offset);
+    char str[45];
+    int i = 0;
+    int rem;
+    int pattern[4] = {6, 2, 4, 8};
+    unsigned long long bitmask;
+    while (i < 44) {
+        rem = 1llu & num->lower;
+        bitmask = 1llu << 1;
+        for (int i = 1; i < 64; ++i) {
+            rem += 0llu ^ (-(bitmask & num->lower) & (pattern[i % 4] ^ 0llu));
+            bitmask <<= 1;
+        }
+        bitmask = 1llu;
+        for (int i = 0; i < 64; ++i) {
+            rem += 0llu ^ (-(bitmask & num->upper) & (pattern[i % 4] ^ 0llu));
+            bitmask <<= 1;
+        }
+        str[i] = rem % 10 + '0';
+        ++i;
+        num->lower /= 10;
+        num->lower += (num->upper % 10) << 31;
+        num->upper /= 10;
+        if (!num->lower && !num->upper)
+            break;
+    }
+    buf[i] = '\0';
+    i--;
+    for (int j = i; j > 0; --j) {
+        buf[j] = str[i - j];
+    }
+
+    return (ssize_t) 1;
 }
 
 /* write operation is skipped */

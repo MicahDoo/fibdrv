@@ -4,14 +4,17 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+// #include "big_num.h"
 
 #define FIB_DEV "/dev/fibonacci"
+#define MAX_BUF 1000
 
 int main()
 {
-    long long sz;
+    long long int sz;
 
-    char buf[1];
+
+    char buf[MAX_BUF];
     char write_buf[] = "testing writing";
     int offset = 100; /* TODO: try test something bigger than the limit */
 
@@ -27,21 +30,24 @@ int main()
     }
 
     for (int i = 0; i <= offset; i++) {
-        lseek(fd, i, SEEK_SET);
+        lseek(fd, i, SEEK_SET);  // lseek used to adjust offset (offset is not
+                                 // supplied in read(fd, buf, 1))
         sz = read(fd, buf, 1);
+
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
-               "%lld.\n",
-               i, sz);
+               "%s.\n",
+               i, buf);
     }
 
+    // going in the opposite direction
     for (int i = offset; i >= 0; i--) {
         lseek(fd, i, SEEK_SET);
         sz = read(fd, buf, 1);
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
-               "%lld.\n",
-               i, sz);
+               "%s.\n",
+               i, buf);
     }
 
     close(fd);
