@@ -87,13 +87,11 @@ static ssize_t fib_read(struct file *file,
 {
     BigNum *num = fib_sequence(*offset);
     char str[45];
-    int i = 0;
-    int rem;
+    int idx = 0;
     int pattern[4] = {6, 2, 4, 8};
-    unsigned long long bitmask;
-    while (i < 44) {
-        rem = 1llu & num->lower;
-        bitmask = 1llu << 1;
+    while (idx < 44) {
+        int rem = 1llu & num->lower;
+        unsigned long long bitmask = 1llu << 1;
         for (int i = 1; i < 64; ++i) {
             rem += 0llu ^ (-(bitmask & num->lower) & (pattern[i % 4] ^ 0llu));
             bitmask <<= 1;
@@ -103,18 +101,18 @@ static ssize_t fib_read(struct file *file,
             rem += 0llu ^ (-(bitmask & num->upper) & (pattern[i % 4] ^ 0llu));
             bitmask <<= 1;
         }
-        str[i] = rem % 10 + '0';
-        ++i;
+        str[idx] = rem % 10 + '0';
+        ++idx;
         num->lower /= 10;
         num->lower += (num->upper % 10) << 31;
         num->upper /= 10;
         if (!num->lower && !num->upper)
             break;
     }
-    buf[i] = '\0';
-    i--;
-    for (int j = i; j > 0; --j) {
-        buf[j] = str[i - j];
+    buf[idx] = '\0';
+    idx--;
+    for (int j = idx; j > 0; --j) {
+        buf[j] = str[idx - j];
     }
 
     return (ssize_t) 1;
